@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Организация услуг · Account Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: #faf7f2; color: #22201d;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: #faf7f2; }
+  #gate { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { width: 100%; max-width: 380px; background: #fff; border: 1px solid #e6ded2;
+          border-radius: 10px; padding: 32px 28px; box-shadow: 0 8px 32px rgba(34,32,29,.06); }
+  .title { font-family: Spectral, Georgia, serif; font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .sub { font-size: 13px; line-height: 1.5; color: #8b8175; margin: 0 0 20px; }
+  label { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+          color: #a8977e; font-weight: 600; margin-bottom: 6px; }
+  input { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #e6ded2;
+          border-radius: 6px; background: #faf7f2; color: #22201d; }
+  input:focus { outline: none; border-color: #8a3324; }
+  button { margin-top: 14px; width: 100%; padding: 11px 12px; font-size: 14px; font-weight: 600;
+           color: #fff; background: #8a3324; border: 0; border-radius: 6px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .err { margin-top: 12px; font-size: 13px; color: #8a3324; min-height: 18px; }
+  #badge { position: fixed; right: 14px; bottom: 14px; z-index: 10; display: none;
+           align-items: center; gap: 10px; padding: 7px 12px; font-size: 12px; color: #6f6559;
+           background: rgba(255,255,255,.94); border: 1px solid #e6ded2; border-radius: 999px;
+           box-shadow: 0 2px 10px rgba(34,32,29,.08); }
+  #badge b { font-weight: 600; color: #22201d; }
+  #badge a { color: #8a3324; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #8a3324; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <form class="card" id="form" autocomplete="on">
+    <h1 class="title">Организация услуг</h1>
+    <p class="sub">Внутренняя страница аккаунт-команды. Данные тянутся из Grist. Введите пароль доступа.</p>
+    <label for="pass">Пароль</label>
+    <input id="pass" name="password" type="password" autocomplete="current-password" autofocus>
+    <button id="go" type="submit">Открыть</button>
+    <div class="err" id="err"></div>
+  </form>
+</div>
+
+<iframe id="app" title="Account Manager"></iframe>
+
+<div id="badge">
+  <span>данные из Grist: <b id="upd">—</b></span>
+  <a id="refresh">обновить</a>
+  <a id="logout">выйти</a>
+</div>
+
+<script>
+const ITER = 250000;
+const POLL_MS = 3 * 60 * 1000;
+const $ = (id) => document.getElementById(id);
+let currentPass = null, lastUpdatedAt = null, appHtml = null;
+
+async function deriveKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+  );
+}
+
+async function loadEncrypted(url, pass, bust) {
+  const res = await fetch(bust ? url + '?t=' + Date.now() : url, { cache: bust ? 'no-store' : 'default' });
+  if (!res.ok) throw new Error('Файл ' + url + ' недоступен (HTTP ' + res.status + ')');
+  const buf = new Uint8Array(await res.arrayBuffer());
+  if (new TextDecoder().decode(buf.slice(0, 4)) !== 'AFE1') throw new Error('Файл ' + url + ' повреждён');
+  const key = await deriveKey(pass, buf.slice(4, 20));
+  let gz;
+  try {
+    gz = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(20, 32) }, key, buf.slice(32));
+  } catch { const e = new Error('bad-pass'); e.badPass = true; throw e; }
+  const stream = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
+function boot(html, dataText) {
+  const dataTag = '<scr' + 'ipt>window.__AM_DATA=JSON.parse(' +
+    JSON.stringify(dataText).replace(/</g, '\\u003c') + ');</scr' + 'ipt>';
+  const baseTag = '<base href="' + document.baseURI.replace(/[^/]*$/, '') + '">';
+  const src = html.replace(/<head[^>]*>/i, (m) => m + baseTag + dataTag);
+  const frame = $('app');
+  frame.srcdoc = src;
+  frame.style.display = 'block';
+  $('gate').style.display = 'none';
+  $('badge').style.display = 'flex';
+}
+
+function showUpdated(iso) {
+  lastUpdatedAt = iso || null;
+  $('upd').textContent = iso
+    ? new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '—';
+}
+
+async function open(pass, { silent } = {}) {
+  const [html, dataText] = await Promise.all([
+    appHtml ? Promise.resolve(appHtml) : loadEncrypted('app.enc', pass),
+    loadEncrypted('data.enc', pass, true)
+  ]);
+  appHtml = html;
+  currentPass = pass;
+  localStorage.setItem('am_pass', pass);
+  const data = JSON.parse(dataText);
+  showUpdated(data.updatedAt);
+  boot(html, dataText);
+  if (!silent) startPolling();
+}
+
+let pollTimer = null;
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pull, POLL_MS);
+}
+
+async function pull() {
+  if (!currentPass) return;
+  try {
+    const dataText = await loadEncrypted('data.enc', currentPass, true);
+    const data = JSON.parse(dataText);
+    if (data.updatedAt === lastUpdatedAt) return;
+    showUpdated(data.updatedAt);
+    const win = $('app').contentWindow;
+    if (win && typeof win.__AM_APPLY === 'function') win.__AM_APPLY(data);
+    else boot(appHtml, dataText);
+  } catch (e) { /* сеть отвалилась — попробуем в следующий раз */ }
+}
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pass = $('pass').value;
+  if (!pass) return;
+  $('go').disabled = true; $('err').textContent = '';
+  try { await open(pass); }
+  catch (err) {
+    $('err').textContent = err.badPass ? 'Неверный пароль' : err.message;
+    $('go').disabled = false;
+  }
+});
+
+$('refresh').addEventListener('click', () => { lastUpdatedAt = null; pull(); });
+$('logout').addEventListener('click', () => { localStorage.removeItem('am_pass'); location.reload(); });
+
+(async () => {
+  const saved = localStorage.getItem('am_pass');
+  if (!saved) return;
+  try { await open(saved); }
+  catch (err) { localStorage.removeItem('am_pass'); if (!err.badPass) $('err').textContent = err.message; }
+})();
+</script>
+</body>
+</html>
