@@ -82,7 +82,9 @@ async function deriveKey(pass, salt) {
 }
 
 async function loadEncrypted(url, pass, bust) {
-  const res = await fetch(bust ? url + '?t=' + Date.now() : url, { cache: bust ? 'no-store' : 'default' });
+  // no-cache = всегда спрашиваем сервер, но при совпадении ETag браузер отдаёт своё (304),
+  // иначе после пересборки интерфейса ещё 10 минут показывалась бы старая версия
+  const res = await fetch(bust ? url + '?t=' + Date.now() : url, { cache: bust ? 'no-store' : 'no-cache' });
   if (!res.ok) throw new Error('Файл ' + url + ' недоступен (HTTP ' + res.status + ')');
   const buf = new Uint8Array(await res.arrayBuffer());
   if (new TextDecoder().decode(buf.slice(0, 4)) !== 'AFE1') throw new Error('Файл ' + url + ' повреждён');
