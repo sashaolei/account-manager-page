@@ -33,6 +33,16 @@
            box-shadow: 0 2px 10px rgba(34,32,29,.08); }
   #badge b { font-weight: 600; color: #22201d; }
   #badge a { color: #8a3324; cursor: pointer; text-decoration: none; border-bottom: 1px dotted #8a3324; }
+  #badge a.busy { color: #a8977e; cursor: default; border-bottom-color: transparent; }
+  #badge.ok { border-color: #0f6e5c55; background: #f0f9f6; }
+  #badge.ok #state { color: #0f6e5c; font-weight: 600; }
+  #badge.warn { border-color: #8a332455; background: #fdf5f3; }
+  #badge.warn #state { color: #8a3324; font-weight: 600; }
+  #badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #0f6e5c; opacity: .5; }
+  #badge.stale .dot { background: #a8611f; opacity: 1; }
+  @keyframes am-spin { to { transform: rotate(360deg) } }
+  #badge .dot.spin { border: 2px solid #a8977e; border-top-color: transparent; background: none;
+                     width: 10px; height: 10px; animation: am-spin .7s linear infinite; }
 </style>
 </head>
 <body>
@@ -51,7 +61,8 @@
 <iframe id="app" title="Account Manager"></iframe>
 
 <div id="badge">
-  <span>данные из Grist: <b id="upd">—</b></span>
+  <span class="dot" id="dot"></span>
+  <span id="state">данные из Grist: <b id="upd">—</b></span>
   <a id="refresh">обновить</a>
   <a id="logout">выйти</a>
 </div>
@@ -96,11 +107,41 @@ function boot(html, dataText) {
   $('badge').style.display = 'flex';
 }
 
+function ago(iso) {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (min < 1) return 'только что';
+  if (min < 60) return min + ' мин назад';
+  const h = Math.round(min / 60);
+  if (h < 24) return h === 1 ? 'час назад' : h + ' ч назад';
+  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+// обычное состояние бейджа: когда данные последний раз приехали из Grist
+function renderState() {
+  if (flashUntil > Date.now()) return;
+  $('badge').classList.remove('ok', 'warn');
+  $('state').innerHTML = 'данные из Grist: <b id="upd"></b>';
+  $('upd').textContent = lastUpdatedAt ? ago(lastUpdatedAt) : '—';
+  $('badge').title = lastUpdatedAt
+    ? 'Выгрузка из Grist ' + new Date(lastUpdatedAt).toLocaleString('ru-RU') + '. Обновляется каждые 15 минут.'
+    : '';
+  const stale = lastUpdatedAt && Date.now() - new Date(lastUpdatedAt) > 40 * 60000;
+  $('badge').classList.toggle('stale', !!stale);
+}
+
+let flashUntil = 0;
+// короткое сообщение поверх обычного состояния
+function flash(text, kind, ms) {
+  flashUntil = Date.now() + (ms || 2500);
+  $('badge').classList.remove('ok', 'warn');
+  if (kind) $('badge').classList.add(kind);
+  $('state').textContent = text;
+  setTimeout(() => { flashUntil = 0; renderState(); }, ms || 2500);
+}
+
 function showUpdated(iso) {
   lastUpdatedAt = iso || null;
-  $('upd').textContent = iso
-    ? new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : '—';
+  renderState();
 }
 
 async function open(pass, { silent } = {}) {
@@ -124,16 +165,19 @@ function startPolling() {
 }
 
 async function pull() {
-  if (!currentPass) return;
+  if (!currentPass) return 'нет пароля';
   try {
     const dataText = await loadEncrypted('data.enc', currentPass, true);
     const data = JSON.parse(dataText);
-    if (data.updatedAt === lastUpdatedAt) return;
+    if (data.updatedAt === lastUpdatedAt) return 'без изменений';
     showUpdated(data.updatedAt);
     const win = $('app').contentWindow;
     if (win && typeof win.__AM_APPLY === 'function') win.__AM_APPLY(data);
     else boot(appHtml, dataText);
-  } catch (e) { /* сеть отвалилась — попробуем в следующий раз */ }
+    return 'обновлено';
+  } catch (e) {
+    return 'ошибка';
+  }
 }
 
 $('form').addEventListener('submit', async (e) => {
@@ -148,8 +192,26 @@ $('form').addEventListener('submit', async (e) => {
   }
 });
 
-$('refresh').addEventListener('click', () => { lastUpdatedAt = null; pull(); });
+$('refresh').addEventListener('click', async () => {
+  const link = $('refresh');
+  if (link.classList.contains('busy')) return;
+  link.classList.add('busy');
+  link.textContent = 'проверяю…';
+  $('dot').classList.add('spin');
+  const started = Date.now();
+  const res = await pull();
+  // даём анимации прожить хотя бы полсекунды, иначе клик выглядит как «ничего не произошло»
+  await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+  $('dot').classList.remove('spin');
+  link.classList.remove('busy');
+  link.textContent = 'обновить';
+  if (res === 'обновлено') flash('данные обновлены', 'ok');
+  else if (res === 'без изменений') flash('уже актуальные', 'ok');
+  else flash('не удалось загрузить', 'warn', 4000);
+});
 $('logout').addEventListener('click', () => { localStorage.removeItem('am_pass'); location.reload(); });
+
+setInterval(renderState, 30000);
 
 (async () => {
   const saved = localStorage.getItem('am_pass');
