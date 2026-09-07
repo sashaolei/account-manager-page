@@ -17,11 +17,18 @@ if (!passphrase) throw new Error('PAGE_PASSPHRASE не задан');
 // матрица экспертов лежит в репозитории зашифрованной
 const matrixEnc = path.join(ROOT, 'src/matrix.enc');
 const matrixJson = path.join(ROOT, 'src/matrix.json');
-const matrix = JSON.parse(
-  fs.existsSync(matrixEnc)
-    ? await decrypt(fs.readFileSync(matrixEnc), passphrase)
-    : fs.readFileSync(matrixJson, 'utf8')
-);
+const readMatrix = async () => {
+  if (fs.existsSync(matrixEnc)) {
+    try {
+      return await decrypt(fs.readFileSync(matrixEnc), passphrase);
+    } catch {
+      // пароль не тот (например, локальный прогон тестов) — берём открытую копию
+      if (!fs.existsSync(matrixJson)) throw new Error('matrix.enc не расшифровывается этим паролем');
+    }
+  }
+  return fs.readFileSync(matrixJson, 'utf8');
+};
+const matrix = JSON.parse(await readMatrix());
 
 const [team, products, commitments, zite] = await Promise.all([
   records('Team', { limit: 2000 }),

@@ -16,12 +16,13 @@ const FIXTURES = {
     { id: 1, fields: { Name: 'Recruiter One', Name_Rus: 'Рекрутер', Role: 'Recruiter', Retired: false,
       Telegram: 'rec_one', Zcal: 'https://zcal.co/one', Notion: 'https://notion.so/one',
       On_Stop: false, Products_Work: ['L', 10], Specifics_of_the_work: 'спец',
-      Temporary_Conditions: '', Country: '"РФ, Москва"', Time_Zone: 'msk',
+      Temporary_Conditions: '', Country: ['L', 'Россия'], City: ['L', 'Москва'], Time_Zone: ['L', 'Europe/Moscow'],
       Time_In_Team: '2 лет', Now_Vacation: false, Vacations: '14.09.26 — 21.09.26',
       Vip_Active: 3, Actual_Earnings_excl_VIP_Fix_Only_Recruiters_: 10000,
       VIP_Fixed_Fee_Forecast_Only_Recruiters_: 7500, Expected_Salary: 100000, Active: 5, Pause: 1 } },
     { id: 2, fields: { Name: 'Searcher One', Name_Rus: 'Серчер', Role: 'Searcher', Retired: false,
-      Telegram: '@srch', Products_Work: ['L', 10], Country: 'Россия, Казань',
+      Telegram: '@srch', Products_Work: ['L', 10], Country: ['L', 'Казахстан'], City: ['L', 'Алматы'],
+      Time_Zone: ['L', 'Asia/Almaty'],
       Capacity_Only_Searchers_: 4, Free_Only_Searchers_: 2, Active: 11, Pause: 2 } },
     { id: 3, fields: { Name: 'Retired Guy', Role: 'Recruiter', Retired: true } },
     { id: 4, fields: { Name: 'Sales Guy', Role: 'Sales', Retired: false } }
@@ -78,13 +79,16 @@ assert.equal(data.EXPERTS.length, 1, 'один рекрутер (уволенн�
 assert.equal(data.RESEARCHERS.length, 1, 'один серчер');
 const e = data.EXPERTS[0];
 assert.equal(e.telegram, '@rec_one', 'телеграм с собакой');
-assert.equal(e.country, 'РФ, Москва', 'кавычки из Grist сняты');
-assert.deepEqual(e.residenceCountries, ['РФ']);
+assert.equal(e.country, 'Россия, Москва', 'страна и город из ChoiceList');
+assert.deepEqual(e.residenceCountries, ['Россия']);
+assert.equal(e.timeZoneLabel, 'МСК', 'таймзона как смещение от МСК');
 assert.deepEqual(e.products, ['VIP'], 'продукты развёрнуты из ссылок');
 assert.deepEqual(e.vacations, [{ start: '2026-09-14', finish: '2026-09-21' }]);
 const r = data.RESEARCHERS[0];
 assert.equal(r.capacity, 4);
 assert.equal(r.free, 2);
+assert.equal(r.country, 'Казахстан, Алматы', 'у серчера тоже страна + город');
+assert.equal(r.timeZoneLabel, 'МСК+2', 'смещение Алматы от Москвы');
 const s = data.SALARY_PROGRESS[0];
 assert.equal(s.estRewardLeft, 82500);
 assert.equal(s.progress, 18);

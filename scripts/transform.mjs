@@ -42,11 +42,34 @@ function currentVacation(list) {
   return { start: r.start, end: r.finish };
 }
 
-// "РФ, Москва" / "Россия, Казань" -> ["РФ"]
-function residenceCountries(country) {
-  const first = unquoted(country).split(',')[0].trim();
-  if (!first) return [];
-  return /^росси|^рф$/i.test(first) ? ['РФ'] : [first];
+// ChoiceList из Grist приезжает массивом; иногда там одно значение строкой
+const list = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]).map(str).filter(Boolean);
+
+// Смещение зоны относительно московского времени: Asia/Yekaterinburg -> "МСК+2"
+const zoneOffsetMinutes = (tz, date) => {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(date).reduce((a, x) => ((a[x.type] = x.value), a), {});
+  const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour === '24' ? 0 : p.hour, p.minute, p.second);
+  return (asUTC - date.getTime()) / 60000;
+};
+
+export function moscowOffsetLabel(tz, now = new Date()) {
+  const zone = str(tz);
+  if (!zone) return '';
+  let diff;
+  try {
+    diff = (zoneOffsetMinutes(zone, now) - zoneOffsetMinutes('Europe/Moscow', now)) / 60;
+  } catch {
+    return zone; // не IANA — показываем как записано
+  }
+  diff = Math.round(diff * 2) / 2;
+  if (diff === 0) return 'МСК';
+  const whole = Math.trunc(Math.abs(diff));
+  const half = Math.abs(diff) % 1 ? ':30' : '';
+  return 'МСК' + (diff > 0 ? '+' : '−') + whole + half;
 }
 
 export function buildPayload({ team, products, commitments, zite, matrix = {} }) {
@@ -70,8 +93,12 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
       products: refs(m.Products_Work).map((id) => tagById.get(id)).filter(Boolean),
       specialty: str(m.Specifics_of_the_work),
       temporaryConditions: str(m.Temporary_Conditions),
-      country: unquoted(m.Country),
-      timeZone: str(m.Time_Zone),
+      countries_residence: list(m.Country),
+      cities: list(m.City),
+      // то, что показывается на карточке: «Россия, Москва»
+      country: [list(m.Country).join(', '), list(m.City).join(', ')].filter(Boolean).join(', '),
+      timeZone: list(m.Time_Zone)[0] || '',
+      timeZoneLabel: moscowOffsetLabel(list(m.Time_Zone)[0] || ''),
       timeInTeam: str(m.Time_In_Team),
       nowVacation: !!m.Now_Vacation,
       vacations,
@@ -104,9 +131,9 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
       roles: mx.roles || [],
       countries: mx.countries || [],
       residenceLabel: base.country,
-      residenceCountries: mx.residenceCountries?.length
-        ? mx.residenceCountries
-        : residenceCountries(base.country),
+      residenceCountries: base.countries_residence.length
+        ? base.countries_residence
+        : mx.residenceCountries || [],
       isNew: mx.isNew ?? !matrix[base.name]
     };
   });
