@@ -55,6 +55,40 @@ html = process.env.SKIP_ASSETS ? html : html.replace(/\.\/assets\/([A-Za-z0-9._-
   return `data:${mime};base64,${buf.toString('base64')}`;
 });
 
+// 3b. тег с таймзоной во всех карточках команды.
+// Делаем это в сборке, а не в макете: при следующем экспорте из Claude тег
+// добавится сам, вручную его каждый раз возвращать не придётся.
+const tzChip = (v) =>
+  `\n<sc-if value="{{ ${v}.hasTimeZoneTag }}" hint-placeholder-val="{{ false }}">` +
+  `<div style="font-size:11.5px;font-weight:600;color:#5a6b4a;background:#5a6b4a14;border-radius:4px;padding:2px 7px">` +
+  `🕐 {{ ${v}.timeZoneLabel }}</div></sc-if>`;
+
+// а) в шаблоны: сразу после тега со страной/локацией
+let chips = 0;
+html = html.replace(
+  /<sc-if value="\{\{ (ex|rs)\.(?:hasResidenceTag|hasCountryTag|hasCountry) \}\}"[\s\S]*?<\/sc-if>/g,
+  (block, v) => { chips++; return block + tzChip(v); }
+);
+if (chips < 3) throw new Error(`тег таймзоны: ожидали минимум 3 карточки, нашли ${chips}`);
+
+// б) в логику: поля для тега рядом с уже существующими
+const tzLabel = (v) => `(/^[a-z0-9+\\- ]+$/i.test((${v}.timeZone || "").trim()) ? (${v}.timeZone || "").trim().toUpperCase() : (${v}.timeZone || "").trim())`;
+const logicPatches = [
+  ['hasResidenceTag: !!ex.residenceLabel,',
+   'hasResidenceTag: !!ex.residenceLabel, hasTimeZoneTag: !!ex.timeZone, timeZoneLabel: ' + tzLabel('ex') + ','],
+  ['countryTagLabel: e.residenceLabel || (e.residenceCountries || []).join(", "),',
+   'countryTagLabel: e.residenceLabel || (e.residenceCountries || []).join(", "), hasTimeZoneTag: !!e.timeZone, timeZoneLabel: ' + tzLabel('e') + ','],
+  ['timeZone: rs.timeZone || "",',
+   'timeZone: rs.timeZone || "", hasTimeZoneTag: !!rs.timeZone, timeZoneLabel: ' + tzLabel('rs') + ',']
+];
+for (const [from, to] of logicPatches) {
+  if (!html.includes(from)) throw new Error(`тег таймзоны: не найден блок «${from.slice(0, 40)}…»`);
+  html = html.replace(from, to);
+}
+
+// в) у серчеров таймзона дублировалась в подписи — убираем, её теперь показывает тег
+html = html.replace(/ · TZ: \{\{ rs\.timeZone \}\}/g, '');
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
