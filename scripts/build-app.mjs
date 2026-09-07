@@ -89,6 +89,37 @@ for (const [from, to] of logicPatches) {
 // в) у серчеров таймзона дублировалась в подписи — убираем, её теперь показывает тег
 html = html.replace(/ · TZ: \{\{ rs\.timeZone \}\}/g, '');
 
+// 3c. поиск по карточкам в «Подбор экспертов» у сейлзов
+const searchInput =
+  '<input value="{{ salesSearchValue }}" onChange="{{ onSalesSearchChange }}" ' +
+  'placeholder="Поиск по имени, роли, индустрии, стране, продукту..." ' +
+  'style="width:100%;box-sizing:border-box;border:1px solid #ddd4c4;border-radius:6px;background:#fff;' +
+  'padding:10px 14px;font-size:14px;font-family:inherit;margin-bottom:12px">\n';
+const countLabel = '<div style="font-size:13px;color:#8a7f6e;margin-bottom:12px">{{ salesMatchCountLabel }}</div>';
+if (!html.includes(countLabel)) throw new Error('поиск у сейлзов: не найдена строка со счётчиком');
+html = html.replace(countLabel, searchInput + countLabel);
+
+const salesFilterHead = 'const salesMatched = salesBaseExperts.filter(e =>\n      (salesFilters.role.length === 0';
+if (!html.includes(salesFilterHead)) throw new Error('поиск у сейлзов: не найден фильтр salesMatched');
+html = html.replace(
+  salesFilterHead,
+  'const salesQuery = (this.state.salesSearch || "").trim().toLowerCase();\n' +
+  '    const salesMatched = salesBaseExperts.filter(e =>\n' +
+  '      (!salesQuery || [e.ruName, e.name, e.telegram, e.specialty, e.temporaryConditions, e.residenceLabel,' +
+  ' ...(e.roles || []), ...(e.industries || []), ...(e.countries || []), ...(e.products || [])]' +
+  '.filter(Boolean).join(" ").toLowerCase().includes(salesQuery)) &&\n' +
+  '      (salesFilters.role.length === 0'
+);
+
+const salesCount = 'salesMatchCountLabel: salesMatched.length + " из " + experts.length + " экспертов",';
+if (!html.includes(salesCount)) throw new Error('поиск у сейлзов: не найден salesMatchCountLabel');
+html = html.replace(
+  salesCount,
+  salesCount +
+  '\n      salesSearchValue: this.state.salesSearch || "",' +
+  '\n      onSalesSearchChange: e => this.setState({ salesSearch: e.target.value }),'
+);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
