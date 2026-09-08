@@ -89,9 +89,9 @@ assert.equal(r.capacity, 4);
 assert.equal(r.free, 2);
 assert.equal(r.country, 'Казахстан, Алматы', 'у серчера тоже страна + город');
 assert.equal(r.timeZoneLabel, 'МСК+2', 'смещение Алматы от Москвы');
-const s = data.SALARY_PROGRESS[0];
-assert.equal(s.estRewardLeft, 82500);
-assert.equal(s.progress, 18);
+assert.equal(data.SALARY_PROGRESS.length, 0, 'зарплаты не выгружаются вовсе');
+assert.ok(!('expectedSalary' in e), 'у эксперта нет поля с зарплатой');
+assert.ok(!JSON.stringify(data).includes('100000'), 'ни одна сумма зарплаты не попала в выгрузку');
 assert.equal(data.ZITE_LINKS.length, 1, 'связка с несуществующим серчером отброшена');
 assert.deepEqual(data.ZITE_LINKS[0], {
   searcher: 'Searcher One', expert: 'Recruiter One', link: 'https://schedule.fillout.com/t/x'

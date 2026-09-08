@@ -121,6 +121,45 @@ html = html.replace(
   '\n      onSalesSearchChange: e => this.setState({ salesSearch: e.target.value }),'
 );
 
+// 3d. убираем всё, что связано с зарплатами: цифры не должны уезжать из Grist
+//     (общая ссылка — её видят и сейлзы)
+const salaryDrops = [
+  [/\s*<th[^>]*>Прогресс по ЗП<\/th>/, 'колонка «Прогресс по ЗП»'],
+  [/\s*<th[^>]*>Факт заработано без VIP-фикса<\/th>/, 'колонка «Факт заработано»'],
+  [/\s*<th[^>]*>Прогноз VIP-фикс<\/th>/, 'колонка «Прогноз VIP-фикс»'],
+  [/\s*<td style="padding:10px 14px;white-space:normal;min-width:220px;vertical-align:top">[\s\S]*?\{\{ row\.estimateVipFixLabel \}\}<\/td>/, 'ячейки с зарплатой'],
+  [/\s*<sc-if value="\{\{ ex\.hasSalary \}\}"[\s\S]*?<\/sc-if>/, 'полоса прогресса в карточке']
+];
+for (const [re_, what] of salaryDrops) {
+  if (!re_.test(html)) throw new Error(`ЗП: не найдено — ${what}`);
+  html = html.replace(re_, '');
+}
+
+// «Активных VIP» — это счётчик клиентов, а не деньги: оставляем, но берём из карточки эксперта
+const salaryLogic = [
+  ['vipActive: s ? (s.vipActive || 0) : "—",', 'vipActive: e.vipActive || 0,'],
+  ['sortKey: s ? s.estRewardLeft : -Infinity', 'sortKey: 0']
+];
+for (const [from, to] of salaryLogic) {
+  if (!html.includes(from)) throw new Error(`ЗП: не найден блок «${from.slice(0, 40)}…»`);
+  html = html.replace(from, to);
+}
+
+// кнопка «Копировать сводку» больше не выгружает суммы
+const summaryRe = /const expected = s \? s\.expectedSalary[\s\S]*?leftPct \+ "%\)";/;
+if (!summaryRe.test(html)) throw new Error('ЗП: не найден текст сводки');
+html = html.replace(
+  summaryRe,
+  'const text = (e.ruName ? e.ruName + " (" + e.name + ")" : e.name) +\n' +
+  '              "\\nАктивных клиентов: " + activeClientsArr.length + (activeClientsLabel !== "—" ? " (" + activeClientsLabel + ")" : "") +\n' +
+  '              "\\nАктивных випов: " + (e.vipActive || 0);'
+);
+
+// и загрузчики CSV с зарплатами убираем тоже
+const uploadRe = /,\n\s*\{\n\s*title: "Ожидаемая ЗП",[\s\S]*?\n\s*\}\n(\s*\],)/;
+if (!uploadRe.test(html)) throw new Error('ЗП: не найдены карточки загрузки CSV');
+html = html.replace(uploadRe, '\n$1');
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.

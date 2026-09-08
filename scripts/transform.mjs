@@ -106,8 +106,7 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
       vacationEnd: cur.end,
       active: num(m.Active),
       pause: num(m.Pause),
-      vipActive: num(m.Vip_Active),
-      expectedSalary: num(m.Expected_Salary)
+      vipActive: num(m.Vip_Active)
     };
   };
 
@@ -138,24 +137,8 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
     };
   });
 
-  const SALARY_PROGRESS = recruiters
-    .map((m) => {
-      const expectedSalary = num(m.Expected_Salary);
-      const rewardNoVipFix = num(m.Actual_Earnings_excl_VIP_Fix_Only_Recruiters_);
-      const estimateVipFix = num(m.VIP_Fixed_Fee_Forecast_Only_Recruiters_);
-      const earned = rewardNoVipFix + estimateVipFix;
-      return {
-        name: str(m.Name),
-        expectedSalary,
-        estimatedSalary: rewardNoVipFix,
-        rewardNoVipFix,
-        estimateVipFix,
-        vipActive: num(m.Vip_Active),
-        estRewardLeft: Math.max(0, expectedSalary - earned),
-        progress: expectedSalary ? Math.round((earned / expectedSalary) * 100) : 0
-      };
-    })
-    .sort((a, b) => b.expectedSalary - a.expectedSalary || a.name.localeCompare(b.name));
+  // зарплаты сознательно не выгружаем: ссылка общая, суммы остаются в Grist
+  const SALARY_PROGRESS = [];
 
   const ZITE_LINKS = zite
     .map((z) => ({
