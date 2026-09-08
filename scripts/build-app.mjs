@@ -63,27 +63,34 @@ const tzChip = (v) =>
   `<div style="font-size:11.5px;font-weight:600;color:#5a6b4a;background:#5a6b4a14;border-radius:4px;padding:2px 7px">` +
   `🕐 {{ ${v}.timeZoneLabel }}</div></sc-if>`;
 
+// сколько у человека сейчас активных VIP-клиентов (тег появляется только если есть)
+const vipChip = (v) =>
+  `\n<sc-if value="{{ ${v}.hasVipTag }}" hint-placeholder-val="{{ false }}">` +
+  `<div style="font-size:11.5px;font-weight:600;color:#8a6b1f;background:#8a6b1f14;border-radius:4px;padding:2px 7px">` +
+  `⭐ VIP: {{ ${v}.vipActiveLabel }}</div></sc-if>`;
+
 // а) в шаблоны: сразу после тега со страной/локацией
 let chips = 0;
 html = html.replace(
   /<sc-if value="\{\{ (ex|rs)\.(?:hasResidenceTag|hasCountryTag|hasCountry) \}\}"[\s\S]*?<\/sc-if>/g,
-  (block, v) => { chips++; return block + tzChip(v); }
+  (block, v) => { chips++; return block + tzChip(v) + vipChip(v); }
 );
-if (chips < 3) throw new Error(`тег таймзоны: ожидали минимум 3 карточки, нашли ${chips}`);
+if (chips < 3) throw new Error(`теги в карточках: ожидали минимум 3 карточки, нашли ${chips}`);
 
 // б) в логику: поля для тега рядом с уже существующими
 // подпись уже посчитана при выгрузке из Grist: «МСК+2», «МСК−1»
 const tzLabel = (v) => `(${v}.timeZoneLabel || "")`;
+const vipFields = (v) => `hasVipTag: !!${v}.vipActive, vipActiveLabel: (${v}.vipActive || 0),`;
 const logicPatches = [
   ['hasResidenceTag: !!ex.residenceLabel,',
-   'hasResidenceTag: !!ex.residenceLabel, hasTimeZoneTag: !!ex.timeZoneLabel, timeZoneLabel: ' + tzLabel('ex') + ','],
+   'hasResidenceTag: !!ex.residenceLabel, hasTimeZoneTag: !!ex.timeZoneLabel, timeZoneLabel: ' + tzLabel('ex') + ', ' + vipFields('ex')],
   ['countryTagLabel: e.residenceLabel || (e.residenceCountries || []).join(", "),',
-   'countryTagLabel: e.residenceLabel || (e.residenceCountries || []).join(", "), hasTimeZoneTag: !!e.timeZoneLabel, timeZoneLabel: ' + tzLabel('e') + ','],
+   'countryTagLabel: e.residenceLabel || (e.residenceCountries || []).join(", "), hasTimeZoneTag: !!e.timeZoneLabel, timeZoneLabel: ' + tzLabel('e') + ', ' + vipFields('e')],
   ['timeZone: rs.timeZone || "",',
-   'timeZone: rs.timeZone || "", hasTimeZoneTag: !!rs.timeZoneLabel, timeZoneLabel: ' + tzLabel('rs') + ',']
+   'timeZone: rs.timeZone || "", hasTimeZoneTag: !!rs.timeZoneLabel, timeZoneLabel: ' + tzLabel('rs') + ', ' + vipFields('rs')]
 ];
 for (const [from, to] of logicPatches) {
-  if (!html.includes(from)) throw new Error(`тег таймзоны: не найден блок «${from.slice(0, 40)}…»`);
+  if (!html.includes(from)) throw new Error(`теги в карточках: не найден блок «${from.slice(0, 40)}…»`);
   html = html.replace(from, to);
 }
 
