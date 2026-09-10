@@ -30,14 +30,15 @@ const readMatrix = async () => {
 };
 const matrix = JSON.parse(await readMatrix());
 
-const [team, products, commitments, zite] = await Promise.all([
+const [team, products, commitments, zite, capacity] = await Promise.all([
   records('Team', { limit: 2000 }),
   records('Products', { limit: 1000 }),
   records('Commitments', { limit: 20000 }),
-  records('Zite_Fillout_Links', { limit: 5000 })
+  records('Zite_Fillout_Links', { limit: 5000 }),
+  records('Capacity', { limit: 5000 })
 ]);
 
-const payload = buildPayload({ team, products, commitments, zite, matrix });
+const payload = buildPayload({ team, products, commitments, zite, capacity, matrix });
 
 if (!payload.EXPERTS.length || !payload.RESEARCHERS.length) {
   throw new Error('Grist вернул пустую команду — не перезаписываем данные');
@@ -52,5 +53,7 @@ console.log(
     `зарплаты ${payload.SALARY_PROGRESS.length}, fillout ${payload.ZITE_LINKS.length}, ` +
     `команда с клиентами ${Object.keys(payload.ACTIVE_CLIENTS).length}, ` +
     `связок клиент↔команда ${Object.values(payload.ACTIVE_CLIENTS).reduce((s, a) => s + a.length, 0)}, ` +
+    `capacity ${payload.RESEARCHERS.reduce((s, r) => s + r.capacity, 0)} / free ` +
+    `${payload.RESEARCHERS.reduce((s, r) => s + r.free, 0)}, ` +
     `${(json.length / 1024).toFixed(0)} КБ`
 );

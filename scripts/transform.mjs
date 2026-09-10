@@ -72,9 +72,32 @@ export function moscowOffsetLabel(tz, now = new Date()) {
   return 'МСК' + (diff > 0 ? '+' : '−') + whole + half;
 }
 
-export function buildPayload({ team, products, commitments, zite, matrix = {} }) {
+// «1 лет 11 мес.» -> примерная дата входа в команду (нужна для метки «новичок»)
+export function joinDateFromTenure(raw, now = new Date()) {
+  const s = str(raw);
+  if (!s) return '';
+  const y = s.match(/(\d+)\s*(?:лет|года|год|г\.)/i);
+  const mo = s.match(/(\d+)\s*мес/i);
+  if (!y && !mo) return '';
+  const months = (y ? Number(y[1]) : 0) * 12 + (mo ? Number(mo[1]) : 0);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+export function buildPayload({ team, products, commitments, zite, capacity = [], matrix = {} }) {
   const nameById = new Map(team.map((t) => [t.id, str(t.Name)]));
   const tagById = new Map(products.map((p) => [p.id, str(p.Tag)]));
+
+  // Capacity_Only_Searchers_ в Grist — формула, которая читает таблицу Capacity;
+  // через API она иногда приезжает пустой, поэтому берём число и из таблицы напрямую
+  const capacityById = new Map();
+  for (const c of capacity) {
+    const teamId = refs(c.Team_Active)[0];
+    if (teamId == null) continue;
+    const prev = capacityById.get(teamId);
+    if (!prev || c.id > prev.id) capacityById.set(teamId, c);
+  }
 
   const alive = team
     .filter((t) => ROLES.includes(str(t.Role)) && !t.Retired)
@@ -100,6 +123,7 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
       timeZone: list(m.Time_Zone)[0] || '',
       timeZoneLabel: moscowOffsetLabel(list(m.Time_Zone)[0] || ''),
       timeInTeam: str(m.Time_In_Team),
+      joinDate: joinDateFromTenure(m.Time_In_Team),
       nowVacation: !!m.Now_Vacation,
       vacations,
       vacationStart: cur.start,
@@ -112,12 +136,15 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
 
   const RESEARCHERS = alive
     .filter((m) => str(m.Role) === 'Searcher')
-    .map((m) => ({
-      ...common(m),
-      capacity: num(m.Capacity_Only_Searchers_),
-      free: num(m.Free_Only_Searchers_),
-      joinDate: ''
-    }));
+    .map((m) => {
+      const cap = num(m.Capacity_Only_Searchers_) || num(capacityById.get(m.id)?.Capacity);
+      return {
+        ...common(m),
+        capacity: cap,
+        // ровно та же формула, что в Grist: MAX(Capacity - Active, 0)
+        free: Math.max(cap - num(m.Active), 0)
+      };
+    });
 
   const recruiters = alive.filter((m) => str(m.Role) === 'Recruiter');
 
