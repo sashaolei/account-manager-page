@@ -172,6 +172,29 @@ const noteOld = 'Разово загружена инфа про роли, ин�
 if (!html.includes(noteOld)) throw new Error('не найдена подпись про разовую загрузку');
 html = html.replace(noteOld, 'Роли, индустрии и страны экспертизы — из колонок Roles, Industries и Countries в Grist.');
 
+// 3f. комментарий к капасити у серчеров — сразу после специфики работы.
+// Не через <sc-if>: добавленный руками sc-if dc-runtime не подхватывает,
+// поэтому прячем пустой блок через display в style.
+const commentBlock =
+  '\n<div style="display:{{ rs.capacityCommentDisplay }};font-size:12.5px;color:#4a6b8a;' +
+  'margin-bottom:8px;max-width:520px;white-space:pre-wrap;line-height:1.5;' +
+  'border-left:2px solid #4a6b8a44;padding-left:8px">{{ rs.capacityComment }}</div>';
+let comments = 0;
+html = html.replace(
+  /<sc-if value="\{\{ rs\.hasSpecialty \}\}"[\s\S]*?<\/sc-if>/g,
+  (block) => { comments++; return block + commentBlock; }
+);
+if (comments !== 2) throw new Error(`комментарий к капасити: ожидали 2 карточки, нашли ${comments}`);
+
+const commentLogic = 'hasSpecialty: !!rs.specialty,';
+if (!html.includes(commentLogic)) throw new Error('комментарий к капасити: не найден блок с hasSpecialty');
+html = html.replace(
+  commentLogic,
+  commentLogic +
+    ' capacityComment: rs.capacityComment || "",' +
+    ' capacityCommentDisplay: rs.capacityComment ? "block" : "none",'
+);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.

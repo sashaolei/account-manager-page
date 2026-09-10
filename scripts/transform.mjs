@@ -99,6 +99,20 @@ export function buildPayload({ team, products, commitments, zite, capacity = [],
     if (!prev || c.id > prev.id) capacityById.set(teamId, c);
   }
 
+  // тот же текст, что собирает формула Capacity Comment в Grist — на случай,
+  // если само поле приедет пустым
+  const capacityComment = (row) => {
+    if (!row) return '';
+    const flex = str(row.Flexibility);
+    const head =
+      flex === 'yes' ? 'Готов брать замены сверхкапасити'
+      : flex === 'no' ? 'Не готов брать замены сверхкапасити'
+      : '';
+    if (!head) return '';
+    const note = str(row.Note);
+    return note ? head + '\n' + note : head;
+  };
+
   const alive = team
     .filter((t) => ROLES.includes(str(t.Role)) && !t.Retired)
     .sort((a, b) => str(a.Name).localeCompare(str(b.Name)));
@@ -141,6 +155,7 @@ export function buildPayload({ team, products, commitments, zite, capacity = [],
       return {
         ...common(m),
         capacity: cap,
+        capacityComment: str(m.Capacity_Comment) || capacityComment(capacityById.get(m.id)),
         // ровно та же формула, что в Grist: MAX(Capacity - Active, 0)
         free: Math.max(cap - num(m.Active), 0)
       };

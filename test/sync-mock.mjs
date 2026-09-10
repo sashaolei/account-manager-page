@@ -40,7 +40,7 @@ const FIXTURES = {
   ],
   Capacity: [
     { id: 1, fields: { Team_Active: 2, Capacity: 3 } },
-    { id: 2, fields: { Team_Active: 2, Capacity: 7 } }
+    { id: 2, fields: { Team_Active: 2, Capacity: 7, Flexibility: 'yes', Note: 'можно обсуждать' } }
   ],
   Zite_Fillout_Links: [
     { id: 200, fields: { Searcher: 2, Expert: 1, Link: 'https://schedule.fillout.com/t/x' } },
@@ -96,6 +96,8 @@ const r = data.RESEARCHERS[0];
 // формула в Grist приехала пустой — capacity берём из таблицы Capacity (последняя запись)
 assert.equal(r.capacity, 7, 'capacity из таблицы Capacity, а не из пустой формулы');
 assert.equal(r.free, 2, 'free = capacity - active');
+assert.equal(r.capacityComment, 'Готов брать замены сверхкапасити\nможно обсуждать',
+  'комментарий к капасити собран из таблицы Capacity');
 assert.match(r.joinDate, /^\d{4}-\d{2}-01$/, 'дата входа в команду выведена из Time In Team');
 assert.equal(r.country, 'Казахстан, Алматы', 'у серчера тоже страна + город');
 assert.equal(r.timeZoneLabel, 'МСК+2', 'смещение Алматы от Москвы');
