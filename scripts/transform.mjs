@@ -126,9 +126,11 @@ export function buildPayload({ team, products, commitments, zite, matrix = {} })
     const mx = matrix[base.name] || {};
     return {
       ...base,
-      industries: mx.industries || [],
-      roles: mx.roles || [],
-      countries: mx.countries || [],
+      // роли, индустрии и страны экспертизы теперь есть в самом Grist;
+      // матрица из CSV остаётся резервом для тех, у кого поля ещё не заполнены
+      industries: list(m.Industries).length ? list(m.Industries) : mx.industries || [],
+      roles: list(m.Roles).length ? list(m.Roles) : mx.roles || [],
+      countries: list(m.Countries).length ? list(m.Countries) : mx.countries || [],
       residenceLabel: base.country,
       residenceCountries: base.countries_residence.length
         ? base.countries_residence

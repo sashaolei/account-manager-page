@@ -18,6 +18,7 @@ const FIXTURES = {
       On_Stop: false, Products_Work: ['L', 10], Specifics_of_the_work: 'спец',
       Temporary_Conditions: '', Country: ['L', 'Россия'], City: ['L', 'Москва'], Time_Zone: ['L', 'Europe/Moscow'],
       Time_In_Team: '2 лет', Now_Vacation: false, Vacations: '14.09.26 — 21.09.26',
+      Roles: ['L', 'Back-end', 'QA'], Industries: ['L', 'FinTech'], Countries: ['L', 'Германия'],
       Vip_Active: 3, Actual_Earnings_excl_VIP_Fix_Only_Recruiters_: 10000,
       VIP_Fixed_Fee_Forecast_Only_Recruiters_: 7500, Expected_Salary: 100000, Active: 5, Pause: 1 } },
     { id: 2, fields: { Name: 'Searcher One', Name_Rus: 'Серчер', Role: 'Searcher', Retired: false,
@@ -83,6 +84,9 @@ assert.equal(e.country, 'Россия, Москва', 'страна и горо�
 assert.deepEqual(e.residenceCountries, ['Россия']);
 assert.equal(e.timeZoneLabel, 'МСК', 'таймзона как смещение от МСК');
 assert.deepEqual(e.products, ['VIP'], 'продукты развёрнуты из ссылок');
+assert.deepEqual(e.roles, ['Back-end', 'QA'], 'роли берутся из Grist, а не из CSV-матрицы');
+assert.deepEqual(e.industries, ['FinTech'], 'индустрии из Grist');
+assert.deepEqual(e.countries, ['Германия'], 'страны экспертизы из Grist');
 assert.deepEqual(e.vacations, [{ start: '2026-09-14', finish: '2026-09-21' }]);
 const r = data.RESEARCHERS[0];
 assert.equal(r.capacity, 4);
