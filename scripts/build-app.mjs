@@ -226,6 +226,36 @@ const addonsProduct =
   '\\n\\n📂 Рабочий спейс: {{workspace_link}}" },\n';
 html = html.replace(addonsAnchor, addonsProduct + addonsAnchor);
 
+// 3h. убираем вкладку «Ловим заявку в Grist» у всех продуктов,
+// а её два пункта переносим первыми в «Чеклист: до интро»
+const gristItems =
+  '  { id: "assign_manager", label: "Проставляем в Manager своё имя" },\n' +
+  '  { id: "set_csm_status", label: "Ставим статус CSM Status = Организую" }\n';
+const gristDecl =
+  'const GRIST_STAGE = { id: "grist_stage", title: "Ловим заявку в Grist", items: [\n' +
+  gristItems + '] };';
+if (!html.includes(gristDecl)) throw new Error('Grist-вкладка: не найдено объявление GRIST_STAGE');
+html = html.replace(gristDecl, 'const GRIST_STAGE = { id: "grist_stage", title: "Ловим заявку в Grist", items: [] };');
+
+const preIntroHead = 'const PRE_INTRO_CHECKLIST_STAGE = { id: "pre_intro_checklist_stage", title: "Чеклист: до интро", items: [\n';
+if (!html.includes(preIntroHead)) throw new Error('Grist-вкладка: не найден «Чеклист: до интро»');
+html = html.replace(preIntroHead, preIntroHead + gristItems.replace(/\n$/, ',\n'));
+
+const gristTab =
+  '      productTabs: [{\n' +
+  '        title: GRIST_STAGE.title + (this.isStageComplete(GRIST_STAGE, selectedProductId) ? " \u2705" : ""),\n' +
+  '        select: () => { this.setState({ productStage: GRIST_STAGE.id, copied: false }); this.scrollTop(); },\n' +
+  '        color: productStage === GRIST_STAGE.id ? "#8a3324" : "#6b6255",\n' +
+  '        weight: productStage === GRIST_STAGE.id ? 600 : 400,\n' +
+  '        border: productStage === GRIST_STAGE.id ? "#8a3324" : "transparent"\n' +
+  '      }, {\n';
+if (!html.includes(gristTab)) throw new Error('Grist-вкладка: не найдена вкладка в productTabs');
+html = html.replace(gristTab, '      productTabs: [{\n');
+
+const starts = (html.match(/productStage: "grist_stage"/g) || []).length;
+if (starts < 4) throw new Error('Grist-вкладка: ожидали минимум 4 места со стартовой вкладкой, нашли ' + starts);
+html = html.replace(/productStage: "grist_stage"/g, 'productStage: "input_stage"');
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
