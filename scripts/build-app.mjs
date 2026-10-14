@@ -256,6 +256,46 @@ const starts = (html.match(/productStage: "grist_stage"/g) || []).length;
 if (starts < 4) throw new Error('Grist-вкладка: ожидали минимум 4 места со стартовой вкладкой, нашли ' + starts);
 html = html.replace(/productStage: "grist_stage"/g, 'productStage: "input_stage"');
 
+// 3i. правки чеклистов: текст про вставку из Grist, состав «Чеклиста: до интро»
+// и пречек на вкладке «Интро»
+const edits = [
+  // подпись над полем вставки
+  ['Вставь строчку целиком, скопированную из Grist (со всеми колонками, разделёнными табуляцией) — тег клиента, ссылка на Notion-спейс и ссылка на форму фидбека подставятся автоматически.',
+   'Вставь текст из задачи на организацию услуг — тег клиента, ссылка на Notion-спейс и ссылка на форму фидбека подставятся автоматически.'],
+  // три пункта из «Чеклиста: до интро» убираем
+  ['  { id: "check_existing_chat", label: "Проверяем, есть ли уже такой чат — если да, следующий пункт пропускаем", showClientStatus: true },\n', ''],
+  ['  { id: "create_chat", label: "Создать чат с клиентом и сразу добавить бота @AFAgentBot", showChatName: true, showAvatar: true, showBotHandle: true },\n', ''],
+  ['  { id: "chat_description", label: "Добавить в description чата название продукта", showProductName: true },\n', ''],
+  // вместо них — аватарка, сразу после статуса CSM
+  ['  { id: "set_csm_status", label: "Ставим статус CSM Status = Организую" },\n',
+   '  { id: "set_csm_status", label: "Ставим статус CSM Status = Организую" },\n' +
+   '  { id: "set_avatar", label: "Проставь аватарку чату", showAvatar: true },\n'],
+  // «Интро»: убираем пояснялку про чат с сейлзами
+  ['<div style="font-size:13.5px;color:#6b6255;background:#f2ede3;border:1px solid #e6ded2;border-radius:6px;padding:12px 16px;margin-bottom:14px;line-height:1.5">Сначала идём читаем чат с сейлзами. Если там всё ок, нет спецусловий и можно организовывать — добавляем клиента в чат и отправляем интро.</div>\n', ''],
+  // ...и добавляем пречек про важные условия перед добавлением клиента
+  ['const INTRO_PRECHECK_ITEMS = [\n  { id: "add_client"',
+   'const INTRO_PRECHECK_ITEMS = [\n  { id: "check_conditions", label: "Проверяем, есть ли «Важные условия»" },\n  { id: "add_client"'],
+  ['INTRO_PRECHECK_ITEMS.filter(i => i.id === "add_client")',
+   'INTRO_PRECHECK_ITEMS.filter(i => i.id === "check_conditions" || i.id === "add_client")'],
+  ['INTRO_PRECHECK_ITEMS.filter(i => i.id !== "add_client")',
+   'INTRO_PRECHECK_ITEMS.filter(i => i.id !== "check_conditions" && i.id !== "add_client")'],
+  ['placeholder="Вставь сюда строку из Grist"', 'placeholder="Вставь сюда текст из задачи"'],
+  // от этапа «Красная кнопка» отказались — убираем вкладку у всех продуктов
+  ['        if (st === "intro" && product.id !== "p_vip" && product.id !== "p_career_support_rus") {\n' +
+   '          return [tab, {\n' +
+   '            title: "Красная кнопка",\n' +
+   '            select: () => { this.setState({ productStage: "red_button_stage", copied: false }); this.scrollTop(); },\n' +
+   '            color: productStage === "red_button_stage" ? "#8a3324" : "#6b6255",\n' +
+   '            weight: productStage === "red_button_stage" ? 600 : 400,\n' +
+   '            border: productStage === "red_button_stage" ? "#8a3324" : "transparent"\n' +
+   '          }];\n' +
+   '        }\n', '']
+];
+for (const [from, to] of edits) {
+  if (!html.includes(from)) throw new Error(`чеклисты: не найдено «${from.slice(0, 60)}…»`);
+  html = html.replace(from, to);
+}
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
