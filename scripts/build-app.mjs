@@ -296,6 +296,57 @@ for (const [from, to] of edits) {
   html = html.replace(from, to);
 }
 
+// 3j. ещё правки чеклистов и инфо-блока
+const edits2 = [
+  // «Чеклист: до интро» — без пункта про Manager
+  ['  { id: "assign_manager", label: "Проставляем в Manager своё имя" },\n', ''],
+  // «Интро» — без ссылки на тг-чат в Grist
+  ['  { id: "paste_link_grist", label: "Вставить ссылку на тг-чат в Grist" }\n', ''],
+  // «Чеклист организованной услуги»
+  ['  { id: "add_chat_to_folder", label: "Добавить чат с клиентом себе в папку" },\n', ''],
+  ['  { id: "grist_employee_tasks", label: "Проставить Employee в тасках", noteByProduct: { p_career_support_rus: "Таски с техническим мок-интервью оставляем без подключений, а в Тамару добавить на таску «Встреча с ресёрч-аналитиком»." } },\n', ''],
+  ['label: "В Grist поставить Team Active подобранного эксперта", labelByProduct: { p_career_support_rus: "В Grist поставить Team Active подобранного эксперта и рисерч-аналитика Тамару @londonidiot" }',
+   'label: "Добавить подобранного эксперта в 🆕 Team Active", labelByProduct: { p_career_support_rus: "Добавить подобранного эксперта и рисерч-аналитика Тамару @londonidiot в 🆕 Team Active" }'],
+  ['label: "В Grist сменить CSM-статус на «Проверить как дела»"',
+   'label: "Ставим статус CSM Status = Организовано"']
+];
+for (const [from, to] of edits2) {
+  if (!html.includes(from)) throw new Error(`чеклисты-2: не найдено «${from.slice(0, 60)}…»`);
+  html = html.replace(from, to);
+}
+
+// «Сколько стоит» -> «Себестоимость услуги» во всех продуктах
+const priceLabels = (html.match(/label: "Сколько стоит"/g) || []).length;
+if (priceLabels < 7) throw new Error(`инфо-блок: ожидали минимум 7 подписей «Сколько стоит», нашли ${priceLabels}`);
+html = html.replace(/label: "Сколько стоит"/g, 'label: "Себестоимость услуги"');
+
+// 3k. рисёрч-аналитик на РФ-рынке: вместо Тамары — Алина
+const alina = [
+  ['Знакомься, Тамара @londonidiot', 'Знакомься, Алина @alinazlata'],
+  ['забронировать встречу с Тамарой по ссылке: https://zcal.co/tamara-ostroukhova. Zoom Тамара пришлет перед встречей.',
+   'забронировать встречу с Алиной по ссылке: https://schedule.fillout.com/t/3JXkGiQKmMus. Zoom Алина пришлет перед встречей.'],
+  ['Встреча с рисёрч-аналитиком https://zcal.co/tamara-ostroukhova',
+   'Встреча с рисёрч-аналитиком https://schedule.fillout.com/t/3JXkGiQKmMus'],
+  ['рисерч-аналитика Тамару @londonidiot в 🆕 Team Active',
+   'рисерч-аналитика Алину @alinazlata в 🆕 Team Active']
+];
+for (const [from, to] of alina) {
+  if (!html.includes(from)) throw new Error(`Алина: не найдено «${from.slice(0, 60)}…»`);
+  html = html.replace(from, to);
+}
+if (/Тамар|londonidiot|tamara-ostroukhova/.test(html)) throw new Error('Алина: в макете остались упоминания Тамары');
+
+// 3l. новый текст скрипта «Добавление ресерчера» (везде, кроме РФ-рынка)
+const addResearcherOld =
+  'tpl:"Привет!\\n\\nДобавляю в чат ресерчера. Знакомьтесь, {{researcher_name}} {{tag_researcher}}.' +
+  '\\n\\n{{tagclient}}, пожалуйста, забронируйте удобное время по этой ссылке:\\n\\n{{researcher_calendar_link}}"';
+const addResearcherNew =
+  'tpl:"Всем привет! Добавляю в чат ресерчера/ку. Знакомьтесь, {{researcher_name}} {{tag_researcher}}' +
+  '\\n\\n{{tag_researcher}} {{researcher_name}}, пожалуйста, забронируй удобное время по этой ссылке: {{researcher_calendar_link}}' +
+  '\\n\\n❗️Отменить или изменить время встречи после бронирования можно по ссылке из письма с приглашением"';
+if (!html.includes(addResearcherOld)) throw new Error('Ресерчер: не найден старый текст скрипта');
+html = html.replace(addResearcherOld, addResearcherNew);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
