@@ -347,6 +347,92 @@ const addResearcherNew =
 if (!html.includes(addResearcherOld)) throw new Error('Ресерчер: не найден старый текст скрипта');
 html = html.replace(addResearcherOld, addResearcherNew);
 
+// 3m. подключение рисёрч-аналитика на РФ: выбор из двух кандидаток
+// (как в Coaching Session) + живой счётчик активных клиентов из Grist
+const rfField = '  researcher_name: { label: "Имя ресёрчера/ки", fallback: "имя ресёрчера" },\n';
+if (!html.includes(rfField)) throw new Error('РФ-ресёрч: не найдено поле researcher_name');
+html = html.replace(
+  rfField,
+  rfField + '  researcher_name_case: { label: "Имя ресёрчера/ки в падеже (с Алиной, с Эллиной)", fallback: "имя ресёрчера в нужном падеже" },\n'
+);
+
+// новый текст скрипта
+const rfTplOld = /tpl:"\{\{tagclient\}\}, и также добавила к вам в чат рисёрч аналитика[^"]*"/;
+if (!rfTplOld.test(html)) throw new Error('РФ-ресёрч: не найден старый текст скрипта');
+html = html.replace(
+  rfTplOld,
+  'tpl:"Также добавляю к вам в чат рисёрч аналитика {{researcher_name}} {{tag_researcher}}' +
+  '\\n{{researcher_name}} поможет настроить платформу под твой запрос' +
+  '\\n\\n📎 Встреча с рисёрч-аналитиком — 30 минут' +
+  '\\n\\nКак только вы подготовите документы с {{expert_name_case}} {{tagexpert}} можно будет забронировать встречу с {{researcher_name_case}} по ссылке:' +
+  '\\n{{researcher_calendar_link}}' +
+  '\\n\\nZoom {{researcher_name}} также пришлет перед встречей"'
+);
+
+// карточки выбора — в начало этапа
+const stageOpen = '<sc-if value="{{ showStageScript }}" hint-placeholder-val="{{ false }}">';
+if (!html.includes(stageOpen)) throw new Error('РФ-ресёрч: не найден блок этапа');
+const card = (sel, pick, name, tg, load) =>
+  `<div onClick="{{ ${pick} }}" style="cursor:pointer;flex:1;border:1px solid {{ ${sel} }};border-radius:6px;padding:14px 16px;background:#faf7f1">` +
+  `<div style="font-size:14px;font-weight:600;color:#22201d;margin-bottom:4px">{{ ${name} }}</div>` +
+  `<div style="font-size:12.5px;color:#8a7f6e;margin-bottom:6px">{{ ${tg} }}</div>` +
+  `<div style="font-size:12.5px;color:#4a6b8a;margin-bottom:10px">{{ ${load} }}</div>` +
+  `<div style="display:inline-block;font-size:12.5px;padding:5px 12px;border-radius:5px;border:1px solid #d8cfbe;color:#6b6255">Выбрать</div></div>`;
+html = html.replace(
+  stageOpen,
+  stageOpen +
+  '\n<sc-if value="{{ showRfPicker }}" hint-placeholder-val="{{ false }}">' +
+  '<div style="background:#fff;border:1px solid #e6ded2;border-radius:6px;padding:18px 22px;margin-bottom:20px">' +
+  '<div style="font-weight:600;font-size:14px;margin-bottom:4px">Кого подключаем</div>' +
+  '<div style="font-size:12.5px;color:#8a7f6e;margin-bottom:12px">Активные клиенты на Career support Rus — из Grist, обновляются вместе со страницей</div>' +
+  '<div style="display:flex;gap:12px">' +
+  card('rfSelA', 'rfPickA', 'rfNameA', 'rfTgA', 'rfLoadA') +
+  card('rfSelB', 'rfPickB', 'rfNameB', 'rfTgB', 'rfLoadB') +
+  '</div></div></sc-if>'
+);
+
+// логика: кандидатки и счётчик
+const logicAnchor = '    const introTplByMode = {';
+if (!html.includes(logicAnchor)) throw new Error('РФ-ресёрч: не найдено место для логики');
+html = html.replace(
+  logicAnchor,
+  '    const RF_TEAM = [\n' +
+  '      { name: "Алина", nameCase: "Алиной", telegram: "@alinazlata", link: "https://schedule.fillout.com/t/3JXkGiQKmMus", find: "zolotareva" },\n' +
+  '      { name: "Эллина", nameCase: "Эллиной", telegram: "@mctvnss", link: "https://form.fillout.com/t/5qcpT22PxCus", find: "krivorotova" }\n' +
+  '    ];\n' +
+  '    const rfPlural = (n) => (n % 10 === 1 && n % 100 !== 11) ? "активный клиент"\n' +
+  '      : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? "активных клиента" : "активных клиентов";\n' +
+  '    const rfLoadLabel = (needle) => {\n' +
+  '      const map = this.activeClients || {};\n' +
+  '      const key = Object.keys(map).find(k => k.toLowerCase().includes(needle));\n' +
+  '      if (!key) return "нет данных в Grist";\n' +
+  '      const n = (map[key] || []).filter(c => /career support rus/i.test(c.product || "")).length;\n' +
+  '      return n + " " + rfPlural(n);\n' +
+  '    };\n' +
+  '    const rfPickFn = (r) => () => {\n' +
+  '      this.setField("researcher_name", r.name);\n' +
+  '      this.setField("researcher_name_case", r.nameCase);\n' +
+  '      this.setField("tag_researcher", r.telegram);\n' +
+  '      this.setField("researcher_calendar_link", r.link);\n' +
+  '      this.setState({ rfResearcher: r.name });\n' +
+  '    };\n' +
+  logicAnchor
+);
+
+const valsAnchor = '      coachingExperts: ';
+if (!html.includes(valsAnchor)) throw new Error('РФ-ресёрч: не найден coachingExperts');
+html = html.replace(
+  valsAnchor,
+  '      showRfPicker: view === "product" && productStage === "research_rf_stage",\n' +
+  '      rfNameA: RF_TEAM[0].name, rfTgA: RF_TEAM[0].telegram, rfLoadA: rfLoadLabel(RF_TEAM[0].find),\n' +
+  '      rfSelA: this.state.rfResearcher === RF_TEAM[0].name ? "#8a3324" : "#e6ded2",\n' +
+  '      rfPickA: rfPickFn(RF_TEAM[0]),\n' +
+  '      rfNameB: RF_TEAM[1].name, rfTgB: RF_TEAM[1].telegram, rfLoadB: rfLoadLabel(RF_TEAM[1].find),\n' +
+  '      rfSelB: this.state.rfResearcher === RF_TEAM[1].name ? "#8a3324" : "#e6ded2",\n' +
+  '      rfPickB: rfPickFn(RF_TEAM[1]),\n' +
+  valsAnchor
+);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
