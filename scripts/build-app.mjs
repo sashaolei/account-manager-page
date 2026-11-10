@@ -433,6 +433,39 @@ html = html.replace(
   valsAnchor
 );
 
+// 3n. в Grist переехали колонки в заявке на серчера — чиним разбор вставленной строки
+const parseOld =
+  '    const parts = raw.split("\\t");\n' +
+  '    const product = (parts[1] || "").trim();\n' +
+  '    const expertName = (parts[3] || "").trim();\n' +
+  '    let request = (parts.find(p => p.trim().length > 40 || /Запрос серчера/i.test(p)) || parts[parts.length - 2] || "").trim();';
+const parseNew =
+  '    const parts = raw.split("\\t");\n' +
+  '    // Порядок колонок в CRM Tasks: Client, Searcher from Commitment, Manager Client,\n' +
+  '    // Product Commitment, Тип заявки, Deadline, Крайний срок подключения, By Team,\n' +
+  '    // CSM Status, Done, Note, Task, Client TG, Created at, Entergram ID, Employee,\n' +
+  '    // Searcher Request, CSM Type\n' +
+  '    const TASK_COLS = 18, COL_PRODUCT = 3, COL_BY_TEAM = 7, COL_TASK = 11, COL_CLIENT_TG = 12;\n' +
+  '    const newLayout = parts.length >= TASK_COLS;\n' +
+  '    const isProductTag = (t) => PRODUCTS.some(pr => pr.matrixKey && pr.matrixKey.toLowerCase() === String(t).trim().toLowerCase());\n' +
+  '    let product = ((newLayout ? parts[COL_PRODUCT] : parts[1]) || "").trim();\n' +
+  '    if (!isProductTag(product)) product = (parts.find(t => isProductTag(t)) || "").trim();\n' +
+  '    const expertName = ((newLayout ? parts[COL_BY_TEAM] : parts[3]) || "").trim();\n' +
+  '    let request = ((newLayout ? parts[COL_TASK] : "") || parts.find(p => p.trim().length > 40 || /Запрос серчера/i.test(p)) || parts[parts.length - 2] || "").trim();';
+if (!html.includes(parseOld)) throw new Error('заявка на серчера: не найден разбор строки');
+html = html.replace(parseOld, parseNew);
+
+const tgOld = '    const clientTg = (parts[parts.length - 2] || "").trim();';
+const tgNew = '    const clientTg = ((newLayout ? parts[COL_CLIENT_TG] : parts[parts.length - 2]) || "").trim();';
+if (!html.includes(tgOld)) throw new Error('заявка на серчера: не найдена колонка с тегом клиента');
+html = html.replace(tgOld, tgNew);
+
+// в Client TG теперь попадаются телефоны — в тег их не превращаем
+const tgGuardOld = 'if (clientTg && !/^https?:\\/\\//i.test(clientTg) && clientTg.indexOf(" ") === -1) {';
+const tgGuardNew = 'if (clientTg && !/^https?:\\/\\//i.test(clientTg) && clientTg.indexOf(" ") === -1 && !/^[+\\d]/.test(clientTg)) {';
+if (!html.includes(tgGuardOld)) throw new Error('заявка на серчера: не найдена проверка тега клиента');
+html = html.replace(tgGuardOld, tgGuardNew);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
