@@ -466,6 +466,122 @@ const tgGuardNew = 'if (clientTg && !/^https?:\\/\\//i.test(clientTg) && clientT
 if (!html.includes(tgGuardOld)) throw new Error('заявка на серчера: не найдена проверка тега клиента');
 html = html.replace(tgGuardOld, tgGuardNew);
 
+// 3o. вкладка «Интро»: чекбокс «уже работали», список «что прислать» из
+// «Что запрашивать», отложенный старт с датой, инфо-поля у Addons
+// 0) единообразное «Я — Настя» и без двойных пробелов после «привет!»
+const helloRe = /привет!\s+Я\s*[-—]\s*Настя, CSM AgileFluent/g;
+const helloHits = (html.match(helloRe) || []).length;
+if (helloHits < 5) throw new Error(`интро: ожидали минимум 5 приветствий, нашли ${helloHits}`);
+html = html.replace(helloRe, 'привет! Я — Настя, CSM AgileFluent');
+
+const introEdits = [
+  // 1) род у Career support Rus
+  ['Подбираю тебе эксперта для работы и добавлю её сюда в рабочий чатик в течение суток🚀',
+   'Подбираю тебе эксперта для работы и добавлю сюда в рабочий чатик в течение суток🚀'],
+  // 2) поле «когда хочет начать»
+  ['  expert_name_case: { label: "Имя эксперта в падеже (с Анной, с Дмитрием...)", fallback: "имя эксперта в нужном падеже" },',
+   '  start_when: { label: "Когда хочет начать (после 1 декабря, в январе)", fallback: "позже" },\n' +
+   '  expert_name_case: { label: "Имя эксперта в падеже (с Анной, с Дмитрием...)", fallback: "имя эксперта в нужном падеже" },'],
+  // 3) подсказку про «уже работали» заменяем чекбоксом
+  ['<div style="font-size:12.5px;color:#8a7f6e;background:#f2ede3;border:1px solid #e6ded2;border-radius:6px;padding:10px 14px;margin-bottom:16px;line-height:1.5">Если уже работали с этим клиентом раньше — представляться заново не нужно, начинай сразу с сути сообщения.</div>',
+   '<div onClick="{{ onToggleKnownClient }}" style="display:flex;align-items:center;gap:10px;background:#f2ede3;border:1px solid #e6ded2;border-radius:6px;padding:10px 14px;margin-bottom:16px;cursor:pointer">' +
+   '<div style="width:18px;height:18px;flex-shrink:0;border-radius:4px;border:1.5px solid {{ knownClientBorder }};background:{{ knownClientBg }};color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center">{{ knownClientMark }}</div>' +
+   '<div style="font-size:13px;color:#6b6255">Уже работали с этим клиентом — представляться заново не нужно</div></div>'],
+  // 4) у Addons прячем вариант «Данных нет»
+  ['<div onClick="{{ introToggle.onNoData }}" style="cursor:pointer;font-size:13.5px;padding:8px 16px;border-radius:6px;border:1px solid {{ introToggle.noDataBorder }};background:{{ introToggle.noDataBg }};color:{{ introToggle.noDataColor }};font-weight:{{ introToggle.noDataWeight }}">Данных нет</div>',
+   '<sc-if value="{{ showIntroNoDataBtn }}" hint-placeholder-val="{{ true }}"><div onClick="{{ introToggle.onNoData }}" style="cursor:pointer;font-size:13.5px;padding:8px 16px;border-radius:6px;border:1px solid {{ introToggle.noDataBorder }};background:{{ introToggle.noDataBg }};color:{{ introToggle.noDataColor }};font-weight:{{ introToggle.noDataWeight }}">Данных нет</div></sc-if>']
+];
+for (const [from, to] of introEdits) {
+  if (!html.includes(from)) throw new Error(`интро: не найдено «${from.slice(0, 60)}…»`);
+  html = html.replace(from, to);
+}
+
+// 5) шаблоны «данных нет» и «отложенный старт» — считаем из «Что запрашивать»
+const tplByModeOld =
+  '    const introTplByMode = {\n' +
+  '      data: product.introTpl,\n' +
+  '      nodata: product.introNoDataTpl || INTRO_NO_DATA_TPL,\n' +
+  '      deferred: introDeferredHasData ? INTRO_DEFERRED_DATA_TPL : INTRO_DEFERRED_NO_DATA_TPL\n' +
+  '    };';
+if (!html.includes(tplByModeOld)) throw new Error('интро: не найден introTplByMode');
+html = html.replace(tplByModeOld,
+  '    const INTRO_HELLO = "{{tagclient}}, привет! Я — Настя, CSM AgileFluent, ко мне можно обращаться с вопросами)";\n' +
+  '    const introAskItems = (p) => {\n' +
+  '      const it = (((p || {}).infoStage || {}).items || []).find(i => /Что запрашивать/i.test(i.label || ""));\n' +
+  '      return String((it && it.value) || "").split(/[,;]/).map(x => x.trim()).filter(Boolean);\n' +
+  '    };\n' +
+  '    const INTRO_ASK_LINE = { "cv": "CV", "linkedin": "LinkedIn", "запрос": "Твой запрос: на какие роли, индустрии и страны ты целишься" };\n' +
+  '    const introAskBullets = (p) => introAskItems(p).map(x => "— " + (INTRO_ASK_LINE[x.toLowerCase()] || x)).join("\\n");\n' +
+  '    const introAskInline = (p) => {\n' +
+  '      const list = introAskItems(p).map(x => /^[А-ЯЁ][а-яё]/.test(x) ? x.toLowerCase() : x);\n' +
+  '      if (!list.length) return "";\n' +
+  '      return list.length === 1 ? list[0] : list.slice(0, -1).join(", ") + " и " + list[list.length - 1];\n' +
+  '    };\n' +
+  '    const introNoDataFor = (p) => {\n' +
+  '      const id = (p || {}).id;\n' +
+  '      if (id === "p_career_support_rus") return INTRO_HELLO + "\\n\\nОтправишь, пожалуйста, своё CV? Я его изучу и подберу для тебя эксперта)";\n' +
+  '      if (id === "p_job_pack" || id === "p_applies100" || id === "p_vip") {\n' +
+  '        const who = id === "p_vip" ? "менторку" : "эксперта";\n' +
+  '        return INTRO_HELLO + "\\n\\nОтправишь, пожалуйста, следующую информацию, я её изучу и подберу для тебя " + who + ":\\n" +\n' +
+  '          introAskBullets(p) + "\\n\\nЭто нужно, чтобы подобрать " + who + " с наиболее релевантной специализацией)";\n' +
+  '      }\n' +
+  '      return "";\n' +
+  '    };\n' +
+  '    const introDeferredFor = (p, hasData) => {\n' +
+  '      const base = INTRO_HELLO + " Команда передала, что ты хочешь начать {{start_when}}. Вернусь к тебе ближе к этому времени.";\n' +
+  '      const list = introAskInline(p);\n' +
+  '      return (hasData || !list) ? base\n' +
+  '        : base + "\\n\\nА пока пришли, пожалуйста, " + list + " — так к старту всё будет готово и мы сразу подберём эксперта.";\n' +
+  '    };\n' +
+  '    const introTplByMode = {\n' +
+  '      data: product.introTpl,\n' +
+  '      nodata: product.id === "p_applies_addons" ? product.introTpl\n' +
+  '        : (introNoDataFor(product) || product.introNoDataTpl || INTRO_NO_DATA_TPL),\n' +
+  '      deferred: introDeferredFor(product, introDeferredHasData)\n' +
+  '    };'
+);
+
+// 6) чекбокс «уже работали» выкидывает фразу-представление
+const tplTail = '      : (activeSubScript ? activeSubScript.tpl : (script ? script.tpl : ""));';
+if (!html.includes(tplTail)) throw new Error('интро: не найден конец rawScriptTpl');
+html = html.replace('    const rawScriptTpl = view === "product"', '    const rawScriptTpl0 = view === "product"');
+html = html.replace(tplTail,
+  tplTail + '\n' +
+  '    const rawScriptTpl = (view === "product" && productStage === "intro" && this.state.introKnownClient)\n' +
+  '      ? String(rawScriptTpl0 || "").replace(/Я — Настя, CSM AgileFluent, ко мне можно обращаться с вопросами\\)( Рада, что ты будешь с нами бежать до оффера! ✨)?/, "Рада снова работать с тобой)")\n' +
+  '      : rawScriptTpl0;'
+);
+
+// 7) значения для шаблона
+const introVals = '      introToggle: {';
+if (!html.includes(introVals)) throw new Error('интро: не найден introToggle');
+html = html.replace(introVals,
+  '      showIntroNoDataBtn: product.id !== "p_applies_addons",\n' +
+  '      knownClientMark: this.state.introKnownClient ? "✓" : "",\n' +
+  '      knownClientBorder: this.state.introKnownClient ? "#8a3324" : "#d8cfbe",\n' +
+  '      knownClientBg: this.state.introKnownClient ? "#8a3324" : "transparent",\n' +
+  '      onToggleKnownClient: () => this.setState(st => ({ introKnownClient: !st.introKnownClient })),\n' +
+  introVals
+);
+
+// 8) инфо-блок у Addons: пустые поля
+const addonsInfoTail = '      { label: "В скрипте подключения", value: "Строку «Когда все документы будут готовы, в чат добавят серчера/ку» ';
+if (!html.includes(addonsInfoTail)) throw new Error('Addons: не найден инфо-блок');
+html = html.replace(
+  '  { id: "p_applies_addons", title: "Applies&Outreach Addons", matrixKey: "Applies-100 and LinkedIn Outreach",\n' +
+  '    infoStage: { title: "Информация", items: [\n',
+  '  { id: "p_applies_addons", title: "Applies&Outreach Addons", matrixKey: "Applies-100 and LinkedIn Outreach",\n' +
+  '    infoStage: { title: "Информация", items: [\n' +
+  '      { label: "Duration", value: "[ЗАПОЛНИТЬ]" },\n' +
+  '      { label: "Team", value: "[ЗАПОЛНИТЬ]" },\n'
+);
+html = html.replace(
+  'оставляем, только если клиент давно с нами работал." }\n    ] },',
+  'оставляем, только если клиент давно с нами работал." },\n' +
+  '      { label: "Фильтры в матрице", value: "[ЗАПОЛНИТЬ]" },\n' +
+  '      { label: "Что запрашивать", value: "[ЗАПОЛНИТЬ]" }\n    ] },'
+);
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.
