@@ -611,9 +611,10 @@ const slotsFields = (v) =>
   `hasSlotsTag: !!(${v}.slots && ${v}.slots.checkedAt),` +
   ` slotsLabel: (${v}.slots && ${v}.slots.checkedAt)` +
   ` ? (${v}.slots.count === null ? "⏱ слоты не проверились"` +
-  ` : ${v}.slots.count === 0 ? "⏱ нет окон"` +
+  ` : ${v}.slots.count === 0 ? (${v}.slots.soonest ? "⏱ свободно с " + ${v}.slots.soonest` +
+  ` : (${v}.slots.until ? "⏱ окон нет до " + ${v}.slots.until : "⏱ окон нет"))` +
   ` : "⏱ " + ${v}.slots.count + " " + (${v}.slots.count % 10 === 1 && ${v}.slots.count % 100 !== 11 ? "окно"` +
-  ` : (${v}.slots.count % 10 >= 2 && ${v}.slots.count % 10 <= 4 && (${v}.slots.count % 100 < 10 || ${v}.slots.count % 100 >= 20) ? "окна" : "окон")))` +
+  ` : (${v}.slots.count % 10 >= 2 && ${v}.slots.count % 10 <= 4 && (${v}.slots.count % 100 < 10 || ${v}.slots.count % 100 >= 20) ? "окна" : "окон")) + " на неделе")` +
   ` : "",` +
   ` slotsColor: (${v}.slots && ${v}.slots.count >= 5) ? "#0f6e5c"` +
   ` : (${v}.slots && ${v}.slots.count > 0) ? "#a8611f"` +

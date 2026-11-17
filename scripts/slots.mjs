@@ -12,6 +12,9 @@ const CACHE = path.join(ROOT, '.cache', 'slots.json');
 const TTL_MIN = Number(process.env.ZCAL_TTL_MIN || 120);
 const DAYS = Number(process.env.ZCAL_DAYS || 7);
 const MEETING = Number(process.env.ZCAL_MEETING || 60);
+// насколько далеко заглядываем в поисках ближайшего окна; реальный горизонт
+// обрезает сам zcal (сколько дней вперёд у человека открыта запись)
+const HORIZON = Number(process.env.ZCAL_HORIZON || 60);
 const PARALLEL = 4;
 
 // zcal нарезает старты каждые 15 минут, поэтому «102 слота» — это одно и то же
@@ -33,8 +36,16 @@ const msk = new Intl.DateTimeFormat('ru-RU', {
 });
 const fmt = (iso) => msk.format(new Date(iso)).replace(',', '');
 
+const mskDay = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' });
+const fmtDay = (iso) => mskDay.format(new Date(iso));
+
+// при смене формата кэш не переиспользуем, иначе на карточках будут старые подписи
+const CACHE_V = 2;
 const readCache = () => {
-  try { return JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch { return { people: {} }; }
+  try {
+    const c = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
+    return c && c.v === CACHE_V ? c : { v: CACHE_V, people: {} };
+  } catch { return { v: CACHE_V, people: {} }; }
 };
 const writeCache = (cache) => {
   try {
@@ -63,16 +74,22 @@ export async function attachSlots(people) {
       if (!p) return;
       const user = zcalUsername(p.zcal);
       try {
-        const res = await freeSlots(user, { days: DAYS, meeting: MEETING });
+        const res = await freeSlots(user, { days: HORIZON, meeting: MEETING });
         const list = meetings(res.slots || [], res.duration || MEETING);
+        // индикатор — про ближайшую неделю, ближайшие окна показываем любые
+        const weekEnd = Date.now() + DAYS * 86400000;
+        const week = list.filter((s) => new Date(s).getTime() <= weekEnd);
         cache.people[p.name] = {
-          count: list.length,
+          count: week.length,
           next: list.slice(0, 3).map(fmt).join(' · '),
+          soonest: list.length ? fmtDay(list[0]) : '',
+          // докуда вообще открыта запись — чтобы честно сказать «окон нет до ...»
+          until: res.horizon ? fmtDay(new Date(Date.now() + res.horizon * 86400000)) : '',
           checkedAt: new Date().toISOString()
         };
         ok++;
       } catch (e) {
-        cache.people[p.name] = { count: null, next: '', checkedAt: new Date().toISOString(), error: e.message };
+        cache.people[p.name] = { count: null, next: '', soonest: '', until: '', checkedAt: new Date().toISOString(), error: e.message };
         failed++;
       }
     }
@@ -81,7 +98,7 @@ export async function attachSlots(people) {
 
   for (const p of targets) {
     const e = cache.people[p.name];
-    if (e) p.slots = { count: e.count, next: e.next, checkedAt: e.checkedAt };
+    if (e) p.slots = { count: e.count, next: e.next, soonest: e.soonest || '', until: e.until || '', checkedAt: e.checkedAt };
   }
   if (todo.length) writeCache(cache);
 

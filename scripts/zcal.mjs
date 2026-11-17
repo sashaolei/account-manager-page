@@ -75,7 +75,7 @@ function weeklyWindows(availability) {
 export async function freeSlots(username, { days = 7, meeting = 60 } = {}) {
   const profile = await api(`https://zcal.co/api/users/${encodeURIComponent(username)}/profile`);
   const path = pickInvite(profile, username, meeting);
-  if (!path) return { slots: [], note: 'нет публичных встреч' };
+  if (!path) return { slots: [], horizon: 0, note: 'нет публичных встреч' };
   const data = (await api(`https://zcal.co/api/invites/${path}`)).data;
   const inv = data.invite || {};
   const dur = (inv.durationOptions || [meeting])[0];
@@ -110,5 +110,6 @@ export async function freeSlots(username, { days = 7, meeting = 60 } = {}) {
     }
   }
   const uniq = [...new Set(slots)].sort((a, b) => a - b);
-  return { slots: uniq.map((t) => new Date(t).toISOString()), duration: dur };
+  // horizon — на сколько дней вперёд у человека вообще открыта запись в zcal
+  return { slots: uniq.map((t) => new Date(t).toISOString()), duration: dur, horizon };
 }
