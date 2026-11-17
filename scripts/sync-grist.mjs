@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { records } from './grist.mjs';
 import { buildPayload } from './transform.mjs';
 import { encrypt, decrypt } from './crypto.mjs';
+import { attachSlots } from './slots.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'public');
@@ -42,6 +43,13 @@ const payload = buildPayload({ team, products, commitments, zite, capacity, matr
 
 if (!payload.EXPERTS.length || !payload.RESEARCHERS.length) {
   throw new Error('Grist вернул пустую команду — не перезаписываем данные');
+}
+
+// свободные окна в календарях экспертов (zcal). Падение zcal не ломает сборку
+try {
+  await attachSlots(payload.EXPERTS);
+} catch (e) {
+  console.log('zcal: слоты не посчитались —', e.message);
 }
 
 fs.mkdirSync(OUT, { recursive: true });

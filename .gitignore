@@ -13,3 +13,5 @@ src/salary-progress.js
 src/zite-fillout-links.js
 .DS_Store
 SETUP.md
+
+.cache/

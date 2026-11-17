@@ -582,6 +582,57 @@ html = html.replace(
   '      { label: "Что запрашивать", value: "[ЗАПОЛНИТЬ]" }\n    ] },'
 );
 
+// 3p. свободные слоты из zcal: цветной индикатор в тегах и блок с ближайшими
+const slotsChip = (v) =>
+  `\n<sc-if value="{{ ${v}.hasSlotsTag }}" hint-placeholder-val="{{ false }}">` +
+  `<div style="font-size:11.5px;font-weight:600;color:{{ ${v}.slotsColor }};background:{{ ${v}.slotsBg }};border-radius:4px;padding:2px 7px">` +
+  `{{ ${v}.slotsLabel }}</div></sc-if>`;
+let slotChips = 0;
+html = html.replace(
+  /⭐ VIP: \{\{ (ex|rs)\.vipActiveLabel \}\}<\/div><\/sc-if>/g,
+  (block, v) => { slotChips++; return block + slotsChip(v); }
+);
+if (slotChips < 3) throw new Error(`слоты: ожидали минимум 3 карточки, нашли ${slotChips}`);
+
+// блок с ближайшими окнами — после специфики работы в обеих карточках эксперта
+const slotsBlock =
+  '\n<div style="display:{{ ex.slotsNextDisplay }};font-size:12.5px;color:#2f5d7c;background:#2f5d7c0f;' +
+  'border-left:2px solid {{ ex.slotsColor }};border-radius:4px;padding:8px 10px;margin:0 0 8px;max-width:520px;' +
+  'line-height:1.5">🗓 Ближайшие окна (мск): {{ ex.slotsNext }}</div>';
+let slotBlocks = 0;
+html = html.replace(
+  /<sc-if value="\{\{ ex\.(?:has)?[sS]pecialty \}\}"[\s\S]*?<\/sc-if>/g,
+  (block) => { slotBlocks++; return block + slotsBlock; }
+);
+if (slotBlocks !== 2) throw new Error(`слоты: ожидали 2 карточки эксперта, нашли ${slotBlocks}`);
+
+// поля для шаблона — рядом с тегом VIP
+const slotsFields = (v) =>
+  `hasSlotsTag: !!(${v}.slots && ${v}.slots.checkedAt),` +
+  ` slotsLabel: (${v}.slots && ${v}.slots.checkedAt)` +
+  ` ? (${v}.slots.count === null ? "⏱ слоты не проверились"` +
+  ` : ${v}.slots.count === 0 ? "⏱ нет окон"` +
+  ` : "⏱ " + ${v}.slots.count + " " + (${v}.slots.count % 10 === 1 && ${v}.slots.count % 100 !== 11 ? "окно"` +
+  ` : (${v}.slots.count % 10 >= 2 && ${v}.slots.count % 10 <= 4 && (${v}.slots.count % 100 < 10 || ${v}.slots.count % 100 >= 20) ? "окна" : "окон")))` +
+  ` : "",` +
+  ` slotsColor: (${v}.slots && ${v}.slots.count >= 5) ? "#0f6e5c"` +
+  ` : (${v}.slots && ${v}.slots.count > 0) ? "#a8611f"` +
+  ` : (${v}.slots && ${v}.slots.count === 0) ? "#8a3324" : "#8a7f6e",` +
+  ` slotsBg: (${v}.slots && ${v}.slots.count >= 5) ? "#0f6e5c14"` +
+  ` : (${v}.slots && ${v}.slots.count > 0) ? "#a8611f14"` +
+  ` : (${v}.slots && ${v}.slots.count === 0) ? "#8a332414" : "#8a7f6e14",` +
+  ` slotsNext: (${v}.slots && ${v}.slots.next) || "",` +
+  ` slotsNextDisplay: (${v}.slots && ${v}.slots.next) ? "block" : "none",`;
+const slotsLogic = [
+  ['hasVipTag: !!ex.vipActive,', 'hasVipTag: !!ex.vipActive, ' + slotsFields('ex')],
+  ['hasVipTag: !!e.vipActive,', 'hasVipTag: !!e.vipActive, ' + slotsFields('e')],
+  ['hasVipTag: !!rs.vipActive,', 'hasVipTag: !!rs.vipActive, ' + slotsFields('rs')]
+];
+for (const [from, to] of slotsLogic) {
+  if (!html.includes(from)) throw new Error(`слоты: не найден блок «${from}»`);
+  html = html.replace(from, to);
+}
+
 // 4. HTML-парсер браузера выбрасывает <sc-for> из <tbody> (в таблицу можно
 // только <tr>), поэтому переносим цикл в атрибут и восстанавливаем его через
 // DOM API уже после разбора документа — до загрузки dc-runtime.

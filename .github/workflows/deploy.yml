@@ -27,6 +27,13 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Кэш свободных слотов zcal
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: zcal-slots-${{ github.run_id }}
+          restore-keys: zcal-slots-
+
       - name: Забрать данные из Grist
         env:
           GRIST_API_KEY: ${{ secrets.GRIST_API_KEY }}
